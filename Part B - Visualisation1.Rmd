@@ -1,0 +1,51 @@
+---
+title: "Part B - Visualisation, Code and Report"
+output: html_document
+---
+# Getting Started
+
+## Part 1 - Package preparation
+
+This part is to guide you with preparation for R and Spatial Data. As you open your RStudio, you would need go set the working directory and load the required packages that will have the functions for this Part A of the project. You can navigate this directly in RStudio environment to Session > Set Working Directory > Choose Working Directory (Ctrl+Shift+H). You can choose the packages at the bottom right window of RStudio and install if needed, or you can use the code below.
+```{r cars, message=FALSE, warning=FALSE}
+# List packages required
+# Install packages if needed
+library(sf) # essential package for manipulation with vector spatial data
+library(tmap) # map visualization
+```
+
+## Part 2 - Read analysis results from Part A
+
+In this Part B, we are going to use multiple spatial datasets that was made from Part A. Using MULTILINESTRING dataset of South Island major site rivers, POINT dataset of average macroinvertebrate in South Island TAs , and MULTIPOLYGON datases of Territorial Authorities (TA) only South Island
+```{r message=FALSE, warning=FALSE}
+# Reading South Island major site rivers 
+rivers_south <- st_read("rivers_with_site_information.gpkg")
+
+# Reading average macroinvertebrate in South Island TAs
+average_mi_south <- st_read("average_mi_south.gpkg")
+
+# Reading only TA south 
+ta_south_v2 <- st_read("TA_south1.gpkg")
+```
+
+## Part 3 - Analysis
+
+### 1st Interactive Map
+
+This interactive map lets you visualize the mean SiteMedian of MCI under a certain climate conditions. Giving you an overall idea of where in South Island TAs majors rivers have the highest mean MCI and what climate conditions they have. Thus, informing how the general health of the stream ecosystem. 
+```{r pressure, echo=FALSE}
+# setting the environment for interactive plots
+tmap_mode(mode = "view")
+
+# An interactive map of the mean SiteMedian of the MCI in major rivers as well as their climate conditions associated with
+tm_shape(rivers_south) + tm_lines(col = "mean_sitemedian", lwd = 2) + tm_legend(title = "Mean of MCI by rivers") + tm_shape(average_mi_south) + tm_dots(col = "CLIMATE", size = 0.05, alpha = 0.8)
+```
+
+### 2nd Interactive Map
+
+Another interactive map that lets you visualize the overall mean of MCI in South Island TAs major rivers.
+```{r}
+# An interactive map of the overall mean of MCI in the South Island TAs major rivers. 
+tm_shape(ta_south_v2) + tm_polygons(col = "mean_of_rivers.y", title = "mean of MCI by TAs")
+```
+

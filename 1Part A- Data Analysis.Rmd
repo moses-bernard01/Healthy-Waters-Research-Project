@@ -1,0 +1,153 @@
+---
+title: "PART A - Data Analysis, Code and Report"
+output: html_document
+---
+
+# Data
+
+Publicly available data sets used:
+
+ - predicted-average-macroinvertebrate-community-index-mci-scor.gpkg
+ - nz-major-rivers.gpkg
+ - TA_south.gpkg
+
+After downloading the data, unzip them into your working folder so you can access them later.
+
+## Part 1 - Package preparation 
+
+This part is to guide you with preparation for R and Spatial Data. As you open your RStudio, you would need go set the working directory and load the required packages that will have the functions for this Part A of the project. You can navigate this directly in RStudio environment to Session > Set Working Directory > Choose Working Directory (Ctrl+Shift+H). You can choose the packages at the bottom right window of RStudio and install if needed, or you can use the code below. 
+```{r message=FALSE, warning=FALSE}
+# List packages required
+# Install packages if needed
+library(tidyverse) # collection of data manipulation packages
+library(terra) # essential package for manipulation with raster spatial data
+library(sf) # essential package for manipulation with vector spatial data
+library(readr) # providing fast and friendly way to read rectangular data
+library(ggplot2) # data visualization
+library(tmap) # map visualization
+library(plotly) # Making the graph interactively
+```
+
+## Part 2 - Reading Data
+
+In this Part A, we are going to use multiple spatial datasets and learn discover how to combine and manipulate them. Using point dataset of Predicted average Macroinvertebrate Community Index (MCI) score, 2007–2011, multiple polygon datases of Territorial Authorities (TA) only South Island, and Multilinestring of New Zealand Major Rivers. 
+```{r message=FALSE, warning=FALSE}
+# Reading average Macroinvertebrate Community Index
+average_macroinvertebrate <- st_read("predicted-average-macroinvertebrate-community-index-mci-scor.gpkg")
+
+# Reading only Territorial Authorities (TA) only South Island 
+ta_south <- st_read("TA_south.gpkg") 
+
+# Reading only New Zeland's Major Rivers in South Island
+rivers <- st_read("nz-major-rivers.gpkg")
+```
+
+## Part 3 - Subsetting to area of interest
+
+Here we are using st_intersection which is a function in {sf} package. This is a geometric operation that gives a result of geometries and index of overlapping features from second layer 'origins'. 
+
+This lets you identify places of Macroinvertebrate Community Index (MCI) in South Island TAs which indicates the health of the rivers. In addition, it also identifies major rivers as function generates attributes 'n.overlaps' that is the count of all overlaps at South Island TAs.
+```{r message=FALSE, warning=FALSE}
+# Using st_intersection that clips/cuts through all zones of macroinvertebrates in South Island TAs
+average_mi_south <- st_intersection(average_macroinvertebrate, ta_south)
+
+#Using st_intersection that clips/cuts through all zones of major rivers in South Island TAs
+rivers_south <- st_intersection(rivers, ta_south)
+```
+
+## Part 4 - EDA
+
+### Graphic 
+
+This part will let you visualize the data to get an understanding of the data and obtain insight from it. By using 'ggplot2' (part of tidyverse) and geom_boxplot() to specify the graph. 
+```{r message=FALSE, warning=FALSE}
+# Example of a box plot of the CLIMATE and SiteMedian of major rivers in TA South Island 
+# Defining boxplot graph
+p1 <- ggplot(average_mi_south %>% na.omit, aes(x = CLIMATE, y = SiteMedian)) +
+  geom_boxplot(alpha = 0.3) +
+  # See patterns in the presence of overplotting using smoothing method
+  geom_smooth(method = "glm") +
+  # Graph labes
+  labs(x = "Climate", y = "SiteMedian",
+       title = "Median Percetage of Macroinvertebrate", 
+       subtitle = "by Climate | 2007-2011", 
+       caption = "Data: Predicted average MCI score, 2007-2011, Ministry for the Environment") +
+  #positioning the legend
+  theme(legend.position = c(0.93, 0.15))
+
+# make the graph interactively
+ggplotly(p1)
+```
+
+### Interactive map
+
+This is just to let you visualize an interactive map of different categories of climates in South Island TAs major rivers. To give you an understanding of where each of those different climates are present. 
+```{r}
+# setting the environment for interactive plots
+tmap_mode("view")
+
+# Interactive map of the categories of CLIMATE 
+tm_shape(average_mi_south) + tm_dots(col = "CLIMATE", size = 0.03)
+
+```
+
+## Part 6 - Analysis
+In this section we are going to create a buffering zone of 1000 meters around South Island TA. Using 'st_join' to join and filter spatial of datasets. Then group variables by RIVERS. You are also summarising the mean, min, max, standard deviation (sd) of SiteMedian of MCI in South Island TAs major rivers.
+
+Using 'st_set_geometry' to force the geometry to be dropped, and reclasses is accordingly and setting geometry to NULL. Then you are to merge the two datasets by a key variable of interest. Lastly, you will plot the mean SiteMedian of major rivers in South Island TA  to get a full graphical output of the analysis. 
+```{r warning=FALSE}
+# Make buffering for South Island TA rivers
+buffer_1000 <- st_buffer(rivers_south, dist = 1000)
+```
+
+Making a summary for each river and attaching the summary information to rivers, so that we can know what their mean Macroinvertebrate Community Index (MCI) values for each river.
+```{r warning=FALSE}
+# Spatial join with selection of variables and grouping by the RIVERS 
+rivers_summary <- st_join(buffer_1000, average_mi_south, join= st_contains) %>% 
+  group_by(RIVERS) %>% summarise(mean_sitemedian = mean(SiteMedian, na.rm = T),  # Summarising the mean,
+                                 min_sitemedian = min(SiteMedian,  na.rm = T),   # min,
+                                 max_sitemedian = max(SiteMedian,  na.rm = T),   # max,
+                                 sd_sitemedian = sd(SiteMedian,  na.rm = T))     # and standard deviation of SiteMedian
+
+# Forcing the geometries to be dropped by using an 'sf' function st_set_geometry then set the geometry to NULL.
+rivers_summary <- st_set_geometry(rivers_summary, NULL)
+
+
+# Merging two data frames (datasets) by the key variable "RIVERS"
+rivers_south <- rivers_south %>% merge(rivers_summary, by.x = "RIVERS", by.y = "RIVERS")
+```
+
+We can also make a summary by TA, calculating the mean values of MCI for all the rivers within each TA.
+```{r warning=FALSE}
+# Spatial join with selection of variables 'rivers_south' and 'ta_south'
+rivers_south_TA <- st_join(rivers_south, ta_south, join = st_intersects)
+
+# Make a summary by TA
+TA_summary <-  rivers_south_TA %>% st_set_geometry(NULL) %>% group_by(TA2021_V1_00_NAME.y ) %>% summarise( mean_of_rivers = mean(mean_sitemedian, na.rm = T))
+
+# Attach TA summary to TA
+ta_south <- merge(ta_south, TA_summary, by.x = "TA2021_V1_00_NAME", by.y = "TA2021_V1_00_NAME.y")
+```
+
+Box plots of Mean of SiteMedian of TA South Island major rivers.
+```{r warning=FALSE}
+# Setting up a box plot
+p2 <- ggplot(rivers_south_TA, aes(x = TA2021_V1_00_NAME.y, y = mean_sitemedian), na.rm = T) +
+  geom_boxplot() + 
+  coord_flip() + 
+  labs(x = "South Island TAs",
+       y = "Mean of SiteMedian",
+       title = "Mean SiteMedian of Major Rivers",
+       subtitle = "in South Island TA, 2007-2011",
+       caption = "Data: Predicted average MCI score, 2007-2011, Ministry for the Environment")
+# make the graph interactively
+ggplotly(p2)
+```
+
+Write analysis results to disk for later use in the visualization for Part B
+```{r}
+st_write(ta_south, "TA_south1.gpkg", package = "sf")
+st_write(rivers_south, "rivers_with_site_information.gpkg", package = "sf")
+st_write(average_mi_south, "average_mi_south.gpkg", package = "sf")
+```
+
